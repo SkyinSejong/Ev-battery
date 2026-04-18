@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="EV 웨어분석">
+<title>EV 배터리 웨어율 분석기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mono: 'JetBrains Mono', monospace;
+    --bg: #f5f5f9;
+    --card: #fff;
+    --border: #eee;
+    --text: #1a1a2a;
+    --sub: #888;
+    --muted: #aaa;
+    --faint: #bbb;
+    --accent: #3b82f6;
+    --accent2: #6366f1;
+    --green: #16a34a;
+    --lime: #65a30d;
+    --yellow: #ca8a04;
+    --orange: #ea580c;
+    --red: #dc2626;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 480px; margin: 0 auto;
+    min-height: 100vh; padding-bottom: 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  input[type=number] {
+    -webkit-appearance: none; -moz-appearance: textfield;
+    font-family: var(--mono); font-weight: 700;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+  .header { padding: 20px 20px 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .header-tag { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .header-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .header-label { font-size: 10px; color: #999; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .header h1 { font-size: 21px; font-weight: 800; }
+
+  .spec-bar { display: flex; margin: 12px 20px 0; background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .spec-item { flex: 1; text-align: center; padding: 10px 0; }
+  .spec-item + .spec-item { border-left: 1px solid var(--border); }
+  .spec-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
+  .spec-val { font-size: 17px; font-weight: 800; font-family: var(--mono); }
+
+  .content { padding: 12px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--card); border-radius: 16px; padding: 16px; border: 1px solid var(--border); }
+  .card-title { font-size: 11px; color: #999; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+
+  .input-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .input-label { font-size: 11px; color: var(--sub); font-weight: 600; }
+  .input-wrap {
+    display: flex; align-items: center; background: var(--card); border-radius: 12px;
+    border: 1px solid #e0e0e8; overflow: hidden; transition: border 0.2s;
+  }
+  .input-wrap.highlight { border: 2px solid var(--accent); }
+  .input-wrap input {
+    flex: 1; background: transparent; border: none; color: var(--text);
+    font-size: 18px; padding: 12px 14px; outline: none; width: 100%;
+  }
+  .input-wrap.large input { font-size: 28px; padding: 16px 14px; }
+  .input-unit { font-size: 12px; color: #999; padding-right: 14px; white-space: nowrap; }
+
+  .row { display: flex; gap: 8px; }
+
+  .scan-btn {
+    width: 100%; padding: 20px 10px; border-radius: 14px; cursor: pointer;
+    border: 2px dashed #d0d0d8; background: #fafafa;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .scan-btn.done { border: 2px solid var(--green); background: #f0fdf4; }
+  .scan-btn .icon { font-size: 28px; color: var(--faint); }
+  .scan-btn.done .icon { color: var(--green); }
+  .scan-btn .label { font-size: 14px; font-weight: 700; color: #666; }
+  .scan-btn.done .label { color: var(--green); }
+  .scan-btn .sub { font-size: 11px; color: var(--muted); }
+  .scan-btn .preview { width: 100%; max-height: 100px; object-fit: cover; border-radius: 8px; margin-bottom: 4px; }
+
+  .status { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .status.loading { background: #f8f8ff; border: 1px solid #e0e0f0; color: var(--accent2); }
+  .status.ok { background: #f0fdf4; border: 1px solid #d0f0d0; color: var(--green); }
+  .status.err { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .primary-btn {
+    width: 100%; padding: 16px; border: none; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+    letter-spacing: 0.5px; box-shadow: 0 2px 12px #3b82f633;
+    font-family: inherit; transition: transform 0.15s;
+  }
+  .primary-btn:disabled { background: #e0e0e8; color: var(--muted); box-shadow: none; cursor: default; }
+  .primary-btn:active:not(:disabled) { transform: scale(0.97); }
+
+  .result { display: flex; flex-direction: column; gap: 14px; animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .gauge-wrap { display: flex; justify-content: center; gap: 24px; }
+  .gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .gauge-value { font-size: 24px; font-weight: 800; font-family: var(--mono); }
+  .gauge-label { font-size: 11px; color: var(--sub); }
+  .gauge-sub { font-size: 10px; color: var(--muted); }
+
+  .wear-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .wear-label { font-size: 13px; color: #666; }
+  .wear-val { font-family: var(--mono); font-weight: 700; font-size: 15px; }
+  .wear-range { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .wear-bar { height: 6px; background: #f0f0f4; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .wear-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+  .stat { background: var(--card); border-radius: 14px; padding: 14px 16px; border: 1px solid var(--border); flex: 1; min-width: 0; }
+  .stat-label { font-size: 10px; color: #999; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-val { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+  .stat-unit { font-size: 12px; color: #999; }
+  .stat-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  .log { background: var(--card); border-radius: 14px; padding: 14px; border: 1px solid var(--border); font-size: 11px; color: var(--sub); line-height: 1.9; font-family: var(--mono); }
+  .log-title { color: var(--faint); margin-bottom: 4px; font-size: 10px; letter-spacing: 1px; font-weight: 600; }
+
+  .note { font-size: 10px; color: var(--faint); line-height: 1.6; padding: 0 4px; }
+
+  details { font-size: 10px; color: #999; }
+  details summary { cursor: pointer; }
+  .ocr-raw { padding: 8px; background: #f9f9f9; border-radius: 8px; margin-top: 4px; font-family: var(--mono); white-space: pre-wrap; line-height: 1.5; word-break: break-all; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-tag">
+    <div class="header-dot"></div>
+    <span class="header-label">VW ID.4 · 82kWh</span>
+  </div>
+  <h1>배터리 웨어율 분석기</h1>
+</div>
+
+<div class="spec-bar">
+  <div class="spec-item"><div class="spec-label">GROSS</div><div class="spec-val" style="color:#6366f1">82</div></div>
+  <div class="spec-item"><div class="spec-label">NET</div><div class="spec-val" style="color:#3b82f6">77</div></div>
+  <div class="spec-item"><div class="spec-label">USABLE</div><div class="spec-val" style="color:#16a34a">72</div></div>
+</div>
+
+<div class="content">
+  <!-- Step 1 -->
+  <div class="card">
+    <div class="card-title">STEP 1 · 출발 배터리</div>
+    <div class="input-group">
+      <div class="input-label">충전 후 출발 SOC</div>
+      <div class="input-wrap large"><input type="number" id="socStart" inputmode="numeric" step="1" min="0" max="100" placeholder="90"><span class="input-unit">%</span></div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card" id="scanCard">
+    <div class="card-title">STEP 2 · 현재 계기판 촬영</div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <button class="scan-btn" id="scanBtn" onclick="document.getElementById('fileInput').click()">
+      <span class="icon">+</span>
+      <span class="label">계기판 사진 촬영 / 선택</span>
+      <span class="sub">OCR로 숫자를 자동 인식합니다</span>
+    </button>
+    <div id="statusArea" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span class="card-title" style="margin-bottom:0">STEP 3 · 확인 / 수정</span>
+      <span style="font-size:10px;color:#bbb">직접 입력 가능</span>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="input-group"><div class="input-label">현재 SOC</div><div class="input-wrap" id="socEndWrap"><input type="number" id="socEnd" inputmode="numeric" step="1" placeholder="67"><span class="input-unit">%</span></div></div>
+      <div class="input-group"><div class="input-label">주행 거리</div><div class="input-wrap" id="distWrap"><input type="number" id="distance" inputmode="decimal" step="1" placeholder="150"><span class="input-unit">km</span></div></div>
+    </div>
+    <div class="row">
+      <div class="input-group"><div class="input-label">전비 (숫자 2개 입력 → 자동 소수점)</div><div class="input-wrap" id="effWrap"><input type="text" id="effDisplay" inputmode="numeric" maxlength="3" placeholder="64 → 6.4" style="font-size:18px;font-weight:700;font-family:var(--mono);padding:12px 14px;border:none;outline:none;background:transparent;color:var(--text);flex:1;width:100%"><input type="hidden" id="efficiency"><span class="input-unit">km/kWh</span></div></div>
+      <div class="input-group"><div class="input-label">외부 온도</div><div class="input-wrap" id="tempWrap"><input type="number" id="temp" inputmode="decimal" step="0.5" placeholder="25"><span class="input-unit">°C</span></div></div>
+    </div>
+  </div>
+
+  <button class="primary-btn" id="calcBtn" disabled onclick="runCalc()">출발 SOC 입력 + 계기판 데이터 필요</button>
+
+  <div id="resultArea"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script>
+const BATTERY = { gross: 82, official_net: 77, actual_usable: 72 };
+const TEMP_TABLE = [
+  [-20,-10,0.70,"극저온"],[-10,0,0.80,"혹한"],[0,10,0.90,"저온"],
+  [10,15,0.95,"서늘"],[15,30,1.0,"적정"],[30,40,0.97,"고온"],[40,55,0.93,"극고온"]
+];
+
+function getTempCorr(t) {
+  const r = TEMP_TABLE.find(x => t >= x[0] && t < x[1]);
+  return r ? { factor: r[2], label: r[3] } : { factor: 1.0, label: "적정" };
+}
+
+function wearColor(w) { return w<=5?"#16a34a":w<=10?"#65a30d":w<=15?"#ca8a04":w<=20?"#ea580c":"#dc2626"; }
+function sohColor(s) { return s>=95?"#16a34a":s>=90?"#65a30d":s>=85?"#ca8a04":s>=80?"#ea580c":"#dc2626"; }
+
+function parseOCR(text) {
+  const s = text.replace(/\n/g," ").replace(/,/g,".").replace(/[oO](?=\d)/g,"0");
+  const r = { soc:null, distance:null, efficiency:null, temp:null };
+  
+  const socM = s.match(/(\d{1,3})\s*%/);
+  if (socM) r.soc = parseInt(socM[1]);
+  
+  const tempM = s.match(/([\d]{1,2}\.?\d?)\s*°?\s*[Cc]/);
+  if (tempM) r.temp = parseFloat(tempM[1]);
+  
+  const effM = s.match(/([\d]{1,2}\.\d)\s*(?:km\s*\/\s*kWh|km\/kWh)/i);
+  if (effM) r.efficiency = parseFloat(effM[1]);
+  
+  const distAll = [...s.matchAll(/(\d{1,4})\s*km/gi)].map(m=>parseInt(m[1])).filter(d=>d>0&&d<2000);
+  if (distAll.length >= 2) { distAll.sort((a,b)=>a-b); r.distance = distAll[0]; }
+  else if (distAll.length === 1) r.distance = distAll[0];
+  
+  return r;
+}
+
+// Check calc button state
+function checkBtn() {
+  const s = parseFloat(g('socStart'));
+  const e = parseFloat(g('socEnd'));
+  const d = parseFloat(g('distance'));
+  const ef = parseFloat(g('efficiency'));
+  const ok = s>0 && e>0 && s>e && d>0 && ef>0;
+  const btn = document.getElementById('calcBtn');
+  btn.disabled = !ok;
+  btn.textContent = ok ? "분석 시작" : "출발 SOC 입력 + 계기판 데이터 필요";
+}
+function g(id) { return document.getElementById(id).value; }
+
+['socStart','socEnd','distance','temp'].forEach(id => {
+  document.getElementById(id).addEventListener('input', checkBtn);
+});
+
+// 전비 자동 소수점: 숫자만 입력하면 자동으로 X.X 형태로 변환
+document.getElementById('effDisplay').addEventListener('input', function(e) {
+  let raw = this.value.replace(/[^0-9]/g, '');
+  if (raw.length > 3) raw = raw.slice(0, 3);
+  
+  if (raw.length >= 2) {
+    const formatted = raw[0] + '.' + raw.slice(1);
+    this.value = formatted;
+    document.getElementById('efficiency').value = formatted;
+  } else if (raw.length === 1) {
+    this.value = raw;
+    document.getElementById('efficiency').value = '';
+  } else {
+    this.value = '';
+    document.getElementById('efficiency').value = '';
+  }
+  checkBtn();
+});
+
+// File handling
+document.getElementById('fileInput').addEventListener('change', async function(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  e.target.value = '';
+  
+  const btn = document.getElementById('scanBtn');
+  const area = document.getElementById('statusArea');
+  
+  // Preview
+  const url = URL.createObjectURL(file);
+  btn.innerHTML = `<img src="${url}" class="preview" alt=""><span class="label" style="color:#666">분석 중...</span>`;
+  btn.classList.remove('done');
+  
+  area.innerHTML = '<div class="status loading"><div class="spinner"></div>Tesseract.js 초기화 중...</div>';
+  
+  try {
+    if (!window.Tesseract) throw new Error("Tesseract.js 로드 실패 - 네트워크 확인");
+    
+    area.innerHTML = '<div class="status loading"><div class="spinner"></div>이미지 분석 중... (10~20초 소요)</div>';
+    
+    const worker = await Tesseract.createWorker("eng+kor");
+    const { data } = await worker.recognize(file);
+    await worker.terminate();
+    
+    const parsed = parseOCR(data.text);
+    let filled = 0;
+    
+    if (parsed.soc !== null) { document.getElementById('socEnd').value = parsed.soc; filled++; }
+    if (parsed.distance !== null) { document.getElementById('distance').value = parsed.distance; filled++; }
+    if (parsed.efficiency !== null) { document.getElementById('efficiency').value = parsed.efficiency; document.getElementById('effDisplay').value = String(parsed.efficiency); filled++; }
+    if (parsed.temp !== null) { document.getElementById('temp').value = parsed.temp; filled++; }
+    
+    // Highlight filled inputs
+    ['socEndWrap','distWrap','effWrap','tempWrap'].forEach(id => document.getElementById(id).classList.add('highlight'));
+    
+    btn.innerHTML = `<img src="${url}" class="preview" alt=""><span class="label" style="color:#16a34a">다시 촬영</span>`;
+    btn.classList.add('done');
+    
+    let statusMsg = filled >= 3 ? `${filled}개 항목 인식 완료` : filled > 0 ? `${filled}개만 인식 - 나머지 직접 입력` : "인식 실패 - 직접 입력해주세요";
+    area.innerHTML = `<div class="status ${filled>0?'ok':'err'}">${statusMsg}</div>
+      <details><summary>OCR 원문 보기</summary><div class="ocr-raw">${data.text}</div></details>`;
+    
+    checkBtn();
+  } catch (err) {
+    btn.innerHTML = '<span class="icon">+</span><span class="label">다시 촬영</span><span class="sub">탭하여 재시도</span>';
+    area.innerHTML = `<div class="status err">인식 실패 - 아래에서 직접 입력</div>
+      <details><summary>오류 상세</summary><div class="ocr-raw">${err.message||err}</div></details>`;
+  }
+});
+
+function runCalc() {
+  const socStart = parseFloat(g('socStart'));
+  const socEnd = parseFloat(g('socEnd'));
+  const dist = parseFloat(g('distance'));
+  const eff = parseFloat(g('efficiency'));
+  const tmp = parseFloat(g('temp')) || 20;
+  
+  const socUsed = (socStart - socEnd) / 100;
+  const energyUsed = dist / eff;
+  const estFull = energyUsed / socUsed;
+  const tc = getTempCorr(tmp);
+  const corrFull = estFull / tc.factor;
+  
+  const wO = ((BATTERY.official_net - corrFull) / BATTERY.official_net * 100);
+  const wA = ((BATTERY.actual_usable - corrFull) / BATTERY.actual_usable * 100);
+  const sohO = Math.max(0, 100-wO);
+  const sohA = Math.max(0, 100-wA);
+  
+  const socRE = 2 / (socStart-socEnd);
+  const effRE = 0.03 + 10/dist;
+  const totalRE = Math.sqrt(socRE**2 + effRE**2 + 0.03**2);
+  const margin = corrFull * totalRE;
+  
+  const rng = (cap) => [
+    Math.max(0,(cap-(corrFull+margin))/cap*100).toFixed(1),
+    Math.max(0,(cap-(corrFull-margin))/cap*100).toFixed(1)
+  ];
+  const rO = rng(BATTERY.official_net), rA = rng(BATTERY.actual_usable);
+  
+  const wOc = wearColor(Math.max(0,wO)), wAc = wearColor(Math.max(0,wA));
+  const sOc = sohColor(sohO), sAc = sohColor(sohA);
+  
+  function gauge(val, col, label, sub) {
+    const size=116, r=(size-12)/2, circ=2*Math.PI*r, off=circ*(1-Math.min(Math.max(val/100,0),1));
+    return `<div class="gauge">
+      <svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#f0f0f4" stroke-width="10"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}" style="transition:stroke-dashoffset 0.8s cubic-bezier(.4,0,.2,1)"/>
+      </svg>
+      <div style="margin-top:${-size/2-16}px;height:${size/2+16}px;display:flex;align-items:center;justify-content:center">
+        <span class="gauge-value" style="color:${col}">${val.toFixed(1)}%</span>
+      </div>
+      <span class="gauge-label">${label}</span>
+      <span class="gauge-sub">${sub}</span>
+    </div>`;
+  }
+  
+  function wearBlock(label, wear, range, col) {
+    const w = Math.max(0,wear);
+    return `<div>
+      <div class="wear-row"><span class="wear-label">${label}</span>
+        <span class="wear-val" style="color:${col}">${w.toFixed(1)}% <span class="wear-range">(${range[0]}~${range[1]}%)</span></span>
+      </div>
+      <div class="wear-bar"><div class="wear-fill" style="width:${Math.min(w,30)/30*100}%;background:${col}"></div></div>
+    </div>`;
+  }
+  
+  function stat(label, val, unit, accent, sub) {
+    return `<div class="stat"><div class="stat-label">${label}</div>
+      <div><span class="stat-val" style="color:${accent}">${val}</span> <span class="stat-unit">${unit||''}</span></div>
+      ${sub?`<div class="stat-sub">${sub}</div>`:''}
+    </div>`;
+  }
+  
+  document.getElementById('resultArea').innerHTML = `<div class="result">
+    <div class="card" style="border-radius:18px;padding:20px 12px">
+      <div class="card-title" style="text-align:center;margin-bottom:14px">Battery State of Health</div>
+      <div class="gauge-wrap">
+        ${gauge(sohO, sOc, "공식 Net 기준", `웨어 ${Math.max(0,wO).toFixed(1)}%`)}
+        ${gauge(sohA, sAc, "실측 기준", `웨어 ${Math.max(0,wA).toFixed(1)}%`)}
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-title">웨어율 상세</div>
+      ${wearBlock("공식 Net 기준", wO, rO, wOc)}
+      ${wearBlock("실측 Usable 기준", wA, rA, wAc)}
+    </div>
+    
+    <div class="row">
+      ${stat("소모 에너지", energyUsed.toFixed(2), "kWh", "#6366f1")}
+      ${stat("추정 만충", estFull.toFixed(1), "kWh", "#16a34a")}
+    </div>
+    <div class="row">
+      ${stat("온도 보정 후", corrFull.toFixed(1), "kWh", "#ca8a04", `${tc.label} (x${tc.factor})`)}
+      ${stat("오차 범위", `+-${margin.toFixed(1)}`, "kWh", "#ea580c", `상대오차 +-${(totalRE*100).toFixed(1)}%`)}
+    </div>
+    
+    <div class="log">
+      <div class="log-title">CALCULATION LOG</div>
+      <div>소모 = ${dist}/${eff} = <span style="color:#6366f1">${energyUsed.toFixed(2)}kWh</span></div>
+      <div>SOC = ${socStart}-${socEnd} = <span style="color:#6366f1">${socStart-socEnd}%</span></div>
+      <div>만충 = ${energyUsed.toFixed(2)}/${socUsed.toFixed(2)} = <span style="color:#16a34a">${estFull.toFixed(1)}kWh</span></div>
+      <div>보정 = ${estFull.toFixed(1)}/${tc.factor} = <span style="color:#ca8a04">${corrFull.toFixed(1)}kWh</span></div>
+      <div>웨어Net = (${BATTERY.official_net}-${corrFull.toFixed(1)})/${BATTERY.official_net} = <span style="color:${wOc}">${Math.max(0,wO).toFixed(1)}%</span></div>
+      <div>웨어실측 = (${BATTERY.actual_usable}-${corrFull.toFixed(1)})/${BATTERY.actual_usable} = <span style="color:${wAc}">${Math.max(0,wA).toFixed(1)}%</span></div>
+    </div>
+    
+    <div class="note">※ 계기판 기반 추정치. 정확한 SOH는 OBD + Car Scanner로 MEC를 확인하세요. SOC를 많이 소모할수록 오차가 줄어듭니다.</div>
+  </div>`;
+  
+  document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
