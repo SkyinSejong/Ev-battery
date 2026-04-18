@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="EV 웨어분석">
+<title>EV 배터리 웨어율 분석기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mono: 'JetBrains Mono', monospace;
+    --bg: #f5f5f9; --card: #fff; --border: #eee;
+    --text: #1a1a2a; --sub: #888; --muted: #aaa; --faint: #bbb;
+    --accent: #3b82f6; --accent2: #6366f1;
+    --green: #16a34a; --lime: #65a30d; --yellow: #ca8a04; --orange: #ea580c; --red: #dc2626;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 480px; margin: 0 auto;
+    min-height: 100vh; padding-bottom: 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  input[type=number] {
+    -webkit-appearance: none; -moz-appearance: textfield;
+    font-family: var(--mono); font-weight: 700;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+  .header { padding: 20px 20px 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .header-tag { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .header-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .header-label { font-size: 10px; color: #999; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .header h1 { font-size: 21px; font-weight: 800; }
+
+  .spec-bar { display: flex; margin: 12px 20px 0; background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .spec-item { flex: 1; text-align: center; padding: 10px 0; }
+  .spec-item + .spec-item { border-left: 1px solid var(--border); }
+  .spec-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
+  .spec-val { font-size: 17px; font-weight: 800; font-family: var(--mono); }
+
+  .content { padding: 12px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--card); border-radius: 16px; padding: 16px; border: 1px solid var(--border); }
+  .card-title { font-size: 11px; color: #999; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+
+  .input-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .input-label { font-size: 11px; color: var(--sub); font-weight: 600; }
+  .input-wrap {
+    display: flex; align-items: center; background: var(--card); border-radius: 12px;
+    border: 1px solid #e0e0e8; overflow: hidden; transition: border 0.2s;
+  }
+  .input-wrap.highlight { border: 2px solid var(--accent); }
+  .input-wrap input {
+    flex: 1; background: transparent; border: none; color: var(--text);
+    font-size: 18px; padding: 12px 14px; outline: none; width: 100%;
+  }
+  .input-wrap.large input { font-size: 28px; padding: 16px 14px; }
+  .input-unit { font-size: 12px; color: #999; padding-right: 14px; white-space: nowrap; }
+
+  .row { display: flex; gap: 8px; }
+
+  .scan-btn {
+    width: 100%; padding: 20px 10px; border-radius: 14px; cursor: pointer;
+    border: 2px dashed #d0d0d8; background: #fafafa;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .scan-btn.done { border: 2px solid var(--green); background: #f0fdf4; }
+  .scan-btn .icon { font-size: 28px; color: var(--faint); }
+  .scan-btn.done .icon { color: var(--green); }
+  .scan-btn .label { font-size: 14px; font-weight: 700; color: #666; }
+  .scan-btn.done .label { color: var(--green); }
+  .scan-btn .sub { font-size: 11px; color: var(--muted); }
+  .scan-btn .preview { width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 4px; }
+
+  .status { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .status.loading { background: #f8f8ff; border: 1px solid #e0e0f0; color: var(--accent2); }
+  .status.ok { background: #f0fdf4; border: 1px solid #d0f0d0; color: var(--green); }
+  .status.err { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .primary-btn {
+    width: 100%; padding: 16px; border: none; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+    letter-spacing: 0.5px; box-shadow: 0 2px 12px #3b82f633;
+    font-family: inherit; transition: transform 0.15s;
+  }
+  .primary-btn:disabled { background: #e0e0e8; color: var(--muted); box-shadow: none; cursor: default; }
+  .primary-btn:active:not(:disabled) { transform: scale(0.97); }
+
+  /* Crop Modal */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal.show { display: flex; }
+  .modal-content {
+    background: #1a1a1a; border-radius: 16px; padding: 16px;
+    max-width: 100%; width: 100%; max-height: 95vh;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal-title { color: #fff; font-size: 14px; font-weight: 700; text-align: center; }
+  .modal-hint { color: #aaa; font-size: 11px; text-align: center; line-height: 1.5; }
+  .crop-wrapper {
+    position: relative; width: 100%; overflow: hidden; touch-action: none;
+    background: #000; border-radius: 8px;
+    max-height: 65vh; display: flex; align-items: center; justify-content: center;
+  }
+  .crop-canvas { max-width: 100%; max-height: 65vh; display: block; }
+  .crop-box {
+    position: absolute; border: 2px solid #3b82f6;
+    background: rgba(59,130,246,0.15); pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
+  }
+  .crop-box::before, .crop-box::after {
+    content: ''; position: absolute; background: #3b82f6;
+  }
+  .modal-buttons { display: flex; gap: 8px; }
+  .modal-btn {
+    flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 14px;
+    font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .modal-btn.primary { background: var(--accent); color: #fff; }
+  .modal-btn.secondary { background: #333; color: #fff; }
+
+  .result { display: flex; flex-direction: column; gap: 14px; animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .gauge-wrap { display: flex; justify-content: center; gap: 24px; }
+  .gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .gauge-value { font-size: 24px; font-weight: 800; font-family: var(--mono); }
+  .gauge-label { font-size: 11px; color: var(--sub); }
+  .gauge-sub { font-size: 10px; color: var(--muted); }
+
+  .wear-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .wear-label { font-size: 13px; color: #666; }
+  .wear-val { font-family: var(--mono); font-weight: 700; font-size: 15px; }
+  .wear-range { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .wear-bar { height: 6px; background: #f0f0f4; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .wear-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+  .stat { background: var(--card); border-radius: 14px; padding: 14px 16px; border: 1px solid var(--border); flex: 1; min-width: 0; }
+  .stat-label { font-size: 10px; color: #999; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-val { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+  .stat-unit { font-size: 12px; color: #999; }
+  .stat-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  .log { background: var(--card); border-radius: 14px; padding: 14px; border: 1px solid var(--border); font-size: 11px; color: var(--sub); line-height: 1.9; font-family: var(--mono); }
+  .log-title { color: var(--faint); margin-bottom: 4px; font-size: 10px; letter-spacing: 1px; font-weight: 600; }
+
+  .note { font-size: 10px; color: var(--faint); line-height: 1.6; padding: 0 4px; }
+
+  details { font-size: 10px; color: #999; }
+  details summary { cursor: pointer; padding: 4px 0; }
+  .ocr-raw { padding: 8px; background: #f9f9f9; border-radius: 8px; margin-top: 4px; font-family: var(--mono); white-space: pre-wrap; line-height: 1.5; word-break: break-all; max-height: 200px; overflow: auto; }
+
+  .hint-box {
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+    padding: 10px 12px; font-size: 11px; color: #1e40af; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-tag">
+    <div class="header-dot"></div>
+    <span class="header-label">VW ID.4 · 82kWh</span>
+  </div>
+  <h1>배터리 웨어율 분석기</h1>
+</div>
+
+<div class="spec-bar">
+  <div class="spec-item"><div class="spec-label">GROSS</div><div class="spec-val" style="color:#6366f1">82</div></div>
+  <div class="spec-item"><div class="spec-label">NET</div><div class="spec-val" style="color:#3b82f6">77</div></div>
+  <div class="spec-item"><div class="spec-label">USABLE</div><div class="spec-val" style="color:#16a34a">72</div></div>
+</div>
+
+<div class="content">
+  <div class="card">
+    <div class="card-title">STEP 1 · 출발 배터리</div>
+    <div class="input-group">
+      <div class="input-label">충전 후 출발 SOC</div>
+      <div class="input-wrap large"><input type="number" id="socStart" inputmode="numeric" step="1" min="0" max="100" placeholder="90"><span class="input-unit">%</span></div>
+    </div>
+  </div>
+
+  <div class="card" id="scanCard">
+    <div class="card-title">STEP 2 · 현재 계기판 촬영</div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <button class="scan-btn" id="scanBtn" onclick="document.getElementById('fileInput').click()">
+      <span class="icon">+</span>
+      <span class="label">계기판 사진 촬영 / 선택</span>
+      <span class="sub">사진 선택 후 인식할 영역을 직접 지정</span>
+    </button>
+    <div class="hint-box" style="margin-top:10px">
+      <strong>인식률을 높이려면:</strong><br>
+      - 오른쪽 위 정보 박스가 선명하게 찍힌 사진 사용<br>
+      - 화면 반사/손 그림자 없는 사진<br>
+      - 크롭 영역을 정확히 숫자가 있는 부분에만 맞추기
+    </div>
+    <div id="statusArea" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span class="card-title" style="margin-bottom:0">STEP 3 · 확인 / 수정</span>
+      <span style="font-size:10px;color:#bbb">직접 입력 가능</span>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="input-group"><div class="input-label">현재 SOC</div><div class="input-wrap" id="socEndWrap"><input type="number" id="socEnd" inputmode="numeric" step="1" placeholder="67"><span class="input-unit">%</span></div></div>
+      <div class="input-group"><div class="input-label">주행 거리</div><div class="input-wrap" id="distWrap"><input type="number" id="distance" inputmode="decimal" step="1" placeholder="150"><span class="input-unit">km</span></div></div>
+    </div>
+    <div class="row">
+      <div class="input-group"><div class="input-label">전비 (숫자 2개 → 자동 소수점)</div><div class="input-wrap" id="effWrap"><input type="text" id="effDisplay" inputmode="numeric" maxlength="3" placeholder="64 → 6.4" style="font-size:18px;font-weight:700;font-family:var(--mono);padding:12px 14px;border:none;outline:none;background:transparent;color:var(--text);flex:1;width:100%"><input type="hidden" id="efficiency"><span class="input-unit">km/kWh</span></div></div>
+      <div class="input-group"><div class="input-label">외부 온도</div><div class="input-wrap" id="tempWrap"><input type="number" id="temp" inputmode="decimal" step="0.5" placeholder="25"><span class="input-unit">°C</span></div></div>
+    </div>
+  </div>
+
+  <button class="primary-btn" id="calcBtn" disabled onclick="runCalc()">출발 SOC 입력 + 계기판 데이터 필요</button>
+
+  <div id="resultArea"></div>
+</div>
+
+<!-- Crop Modal -->
+<div class="modal" id="cropModal">
+  <div class="modal-content">
+    <div class="modal-title">인식할 영역을 드래그로 지정</div>
+    <div class="modal-hint">손가락으로 숫자가 있는 영역을 사각형으로 그려주세요<br>오른쪽 위 정보박스(거리/전비/온도) 영역을 포함하도록</div>
+    <div class="crop-wrapper" id="cropWrapper">
+      <canvas class="crop-canvas" id="cropCanvas"></canvas>
+      <div class="crop-box" id="cropBox" style="display:none"></div>
+    </div>
+    <div class="modal-buttons">
+      <button class="modal-btn secondary" onclick="cancelCrop()">취소</button>
+      <button class="modal-btn primary" onclick="confirmCrop()">전체 인식</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script>
+const BATTERY = { gross: 82, official_net: 77, actual_usable: 72 };
+const TEMP_TABLE = [
+  [-20,-10,0.70,"극저온"],[-10,0,0.80,"혹한"],[0,10,0.90,"저온"],
+  [10,15,0.95,"서늘"],[15,30,1.0,"적정"],[30,40,0.97,"고온"],[40,55,0.93,"극고온"]
+];
+
+function getTempCorr(t) {
+  const r = TEMP_TABLE.find(x => t >= x[0] && t < x[1]);
+  return r ? { factor: r[2], label: r[3] } : { factor: 1.0, label: "적정" };
+}
+function wearColor(w) { return w<=5?"#16a34a":w<=10?"#65a30d":w<=15?"#ca8a04":w<=20?"#ea580c":"#dc2626"; }
+function sohColor(s) { return s>=95?"#16a34a":s>=90?"#65a30d":s>=85?"#ca8a04":s>=80?"#ea580c":"#dc2626"; }
+function g(id) { return document.getElementById(id).value; }
+
+// 강화된 OCR 파싱
+function parseOCR(text) {
+  // 정규화: 유사 문자 치환
+  let s = text
+    .replace(/\n/g, " ")
+    .replace(/,/g, ".")
+    .replace(/[oO](?=\d|%)/g, "0")
+    .replace(/[lI|](?=\d|%)/g, "1")
+    .replace(/(?<=\d)[oO]/g, "0")
+    .replace(/(?<=\d)[lI|]/g, "1")
+    .replace(/S(?=\d)/g, "5")
+    .replace(/(?<=\d)S/g, "5")
+    .replace(/B(?=\d)/g, "8")
+    .replace(/(?<=\d)B/g, "8");
+  
+  const r = { soc:null, distance:null, efficiency:null, temp:null };
+
+  // SOC: XX% (67%, 100% 등)
+  const socMatches = [...s.matchAll(/(\d{1,3})\s*%/g)];
+  for (const m of socMatches) {
+    const v = parseInt(m[1]);
+    if (v >= 0 && v <= 100) { r.soc = v; break; }
+  }
+
+  // 온도: 27.5°C, 27°C, 27.5C, 27 C (간혹 °가 "o"나 "0"으로 인식됨)
+  const tempPatterns = [
+    /(-?\d{1,2}\.\d)\s*[°o0\s]*[Cc]/,
+    /(-?\d{1,2})\s*[°o0]\s*[Cc]/,
+    /(-?\d{1,2}\.\d)\s*[Cc]/,
+    /(-?\d{1,2})\s*[Cc](?![a-z])/,
+  ];
+  for (const p of tempPatterns) {
+    const m = s.match(p);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v >= -30 && v <= 55) { r.temp = v; break; }
+    }
+  }
+
+  // 전비: X.X km/kWh 또는 X,X km/kWh
+  const effPatterns = [
+    /(\d{1,2}\.\d)\s*km\s*\/?\s*kWh/i,
+    /(\d{1,2}\.\d)\s*km\s*\/?\s*kwh/i,
+    /(\d{1,2})\s*\.\s*(\d)\s*km\s*\/?\s*kWh/i,
+  ];
+  for (const p of effPatterns) {
+    const m = s.match(p);
+    if (m) {
+      const v = m[2] ? parseFloat(m[1] + "." + m[2]) : parseFloat(m[1]);
+      if (v > 0 && v < 15) { r.efficiency = v; break; }
+    }
+  }
+  // 전비 인식 실패 시: "kWh" 앞 숫자를 더 넓게 탐색
+  if (r.efficiency === null) {
+    const m = s.match(/(\d\.\d)[^\d]*kWh/i) || s.match(/(\d)\s*\.\s*(\d)[^\d]*kWh/i);
+    if (m) {
+      const v = m[2] ? parseFloat(m[1] + "." + m[2]) : parseFloat(m[1]);
+      if (v > 0 && v < 15) r.efficiency = v;
+    }
+  }
+
+  // 거리: XXX km (단, km/kWh 제외)
+  const distStr = s.replace(/[\d.]+\s*km\s*\/?\s*kWh/gi, ''); // km/kWh 패턴 제거
+  const distAll = [...distStr.matchAll(/(\d{1,4})\s*km/gi)]
+    .map(m => parseInt(m[1]))
+    .filter(d => d > 0 && d < 2000);
+  if (distAll.length >= 2) { distAll.sort((a,b)=>a-b); r.distance = distAll[0]; }
+  else if (distAll.length === 1) r.distance = distAll[0];
+
+  return r;
+}
+
+// 이미지 전처리: 대비 증가 + 이진화 + 업스케일링
+function preprocessImage(sourceCanvas, invert = false, scale = 2) {
+  const w = sourceCanvas.width * scale;
+  const h = sourceCanvas.height * scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  
+  // 업스케일 + 약간 부드럽게
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, 0, 0, w, h);
+  
+  // 픽셀 단위 처리: 대비 강화 + 이진화
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  
+  // 히스토그램으로 적응적 임계값 계산
+  const histogram = new Array(256).fill(0);
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+    histogram[gray]++;
+  }
+  
+  // Otsu 임계값
+  let total = (data.length / 4);
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * histogram[t];
+  let sumB = 0, wB = 0, maxVar = 0, threshold = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += t * histogram[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > maxVar) { maxVar = between; threshold = t; }
+  }
+  
+  // 이진화 (검은 배경 + 흰 글자면 그대로, 반대면 invert)
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+    let v;
+    if (invert) v = gray > threshold ? 0 : 255;
+    else v = gray > threshold ? 255 : 0;
+    data[i] = data[i+1] = data[i+2] = v;
+  }
+  
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+// 원본 파일 → Canvas (EXIF 회전 자동 적용)
+async function fileToCanvas(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// 크롭된 영역을 새 Canvas로
+function cropCanvas(source, x, y, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(source, x, y, w, h, 0, 0, w, h);
+  return c;
+}
+
+// ==================== Crop Modal Logic ====================
+let sourceCanvas = null;
+let cropStart = null;
+let cropRect = null;
+
+const modal = document.getElementById('cropModal');
+const cropWrapper = document.getElementById('cropWrapper');
+const cropCanvasEl = document.getElementById('cropCanvas');
+const cropBox = document.getElementById('cropBox');
+
+function showCropModal(canvas) {
+  sourceCanvas = canvas;
+  
+  // 캔버스를 모달 크기에 맞춰 표시
+  const maxW = Math.min(window.innerWidth - 40, 440);
+  const maxH = window.innerHeight * 0.65;
+  const ratio = Math.min(maxW / canvas.width, maxH / canvas.height);
+  
+  cropCanvasEl.width = canvas.width * ratio;
+  cropCanvasEl.height = canvas.height * ratio;
+  const ctx = cropCanvasEl.getContext('2d');
+  ctx.drawImage(canvas, 0, 0, cropCanvasEl.width, cropCanvasEl.height);
+  
+  cropCanvasEl.dataset.scale = ratio;
+  cropBox.style.display = 'none';
+  cropRect = null;
+  modal.classList.add('show');
+}
+
+function hideCropModal() {
+  modal.classList.remove('show');
+}
+
+// 터치/마우스 이벤트로 크롭 박스 그리기
+function getEventPos(e) {
+  const rect = cropCanvasEl.getBoundingClientRect();
+  const touch = e.touches ? e.touches[0] : e;
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
+
+function startCrop(e) {
+  e.preventDefault();
+  const pos = getEventPos(e);
+  cropStart = pos;
+  cropBox.style.display = 'block';
+  cropBox.style.left = pos.x + 'px';
+  cropBox.style.top = pos.y + 'px';
+  cropBox.style.width = '0px';
+  cropBox.style.height = '0px';
+}
+
+function moveCrop(e) {
+  if (!cropStart) return;
+  e.preventDefault();
+  const pos = getEventPos(e);
+  const x = Math.min(pos.x, cropStart.x);
+  const y = Math.min(pos.y, cropStart.y);
+  const w = Math.abs(pos.x - cropStart.x);
+  const h = Math.abs(pos.y - cropStart.y);
+  cropBox.style.left = x + 'px';
+  cropBox.style.top = y + 'px';
+  cropBox.style.width = w + 'px';
+  cropBox.style.height = h + 'px';
+  cropRect = { x, y, w, h };
+}
+
+function endCrop(e) {
+  cropStart = null;
+}
+
+cropCanvasEl.addEventListener('touchstart', startCrop, { passive: false });
+cropCanvasEl.addEventListener('touchmove', moveCrop, { passive: false });
+cropCanvasEl.addEventListener('touchend', endCrop);
+cropCanvasEl.addEventListener('mousedown', startCrop);
+cropCanvasEl.addEventListener('mousemove', moveCrop);
+cropCanvasEl.addEventListener('mouseup', endCrop);
+cropCanvasEl.addEventListener('mouseleave', endCrop);
+
+function cancelCrop() {
+  hideCropModal();
+  resetScanBtn();
+}
+
+async function confirmCrop() {
+  hideCropModal();
+  let targetCanvas;
+  if (cropRect && cropRect.w > 20 && cropRect.h > 20) {
+    const scale = parseFloat(cropCanvasEl.dataset.scale);
+    const x = Math.round(cropRect.x / scale);
+    const y = Math.round(cropRect.y / scale);
+    const w = Math.round(cropRect.w / scale);
+    const h = Math.round(cropRect.h / scale);
+    targetCanvas = cropCanvas(sourceCanvas, x, y, w, h);
+  } else {
+    targetCanvas = sourceCanvas;
+  }
+  await runRecognition(targetCanvas);
+}
+
+// ==================== OCR Pipeline ====================
+async function runRecognition(canvas) {
+  const btn = document.getElementById('scanBtn');
+  const area = document.getElementById('statusArea');
+  
+  const previewUrl = canvas.toDataURL('image/jpeg', 0.8);
+  btn.innerHTML = `<img src="${previewUrl}" class="preview" alt=""><span class="label" style="color:#666">인식 중...</span>`;
+  
+  area.innerHTML = '<div class="status loading"><div class="spinner"></div>OCR 엔진 준비 중...</div>';
+  
+  try {
+    if (!window.Tesseract) throw new Error("Tesseract.js 로드 실패");
+    
+    area.innerHTML = '<div class="status loading"><div class="spinner"></div>1/3 원본 이미지 인식 중...</div>';
+    
+    const worker = await Tesseract.createWorker("eng");
+    
+    // Pass 1: 원본
+    const r1 = await worker.recognize(canvas);
+    
+    // Pass 2: 전처리 (검은 배경용 - invert)
+    area.innerHTML = '<div class="status loading"><div class="spinner"></div>2/3 전처리 이미지 인식 중...</div>';
+    const preprocessed = preprocessImage(canvas, true, 2);
+    const r2 = await worker.recognize(preprocessed);
+    
+    // Pass 3: 더 크게 확대
+    area.innerHTML = '<div class="status loading"><div class="spinner"></div>3/3 확대 이미지 인식 중...</div>';
+    const upscaled = preprocessImage(canvas, true, 3);
+    const r3 = await worker.recognize(upscaled);
+    
+    await worker.terminate();
+    
+    // 각 패스에서 파싱
+    const p1 = parseOCR(r1.data.text);
+    const p2 = parseOCR(r2.data.text);
+    const p3 = parseOCR(r3.data.text);
+    
+    // 병합: null이 아닌 값을 우선
+    const merged = {
+      soc: p1.soc ?? p2.soc ?? p3.soc,
+      distance: p1.distance ?? p2.distance ?? p3.distance,
+      efficiency: p1.efficiency ?? p2.efficiency ?? p3.efficiency,
+      temp: p1.temp ?? p2.temp ?? p3.temp,
+    };
+    
+    let filled = 0;
+    if (merged.soc !== null && merged.soc !== undefined) { document.getElementById('socEnd').value = merged.soc; filled++; }
+    if (merged.distance !== null && merged.distance !== undefined) { document.getElementById('distance').value = merged.distance; filled++; }
+    if (merged.efficiency !== null && merged.efficiency !== undefined) {
+      document.getElementById('efficiency').value = merged.efficiency;
+      document.getElementById('effDisplay').value = String(merged.efficiency);
+      filled++;
+    }
+    if (merged.temp !== null && merged.temp !== undefined) { document.getElementById('temp').value = merged.temp; filled++; }
+    
+    ['socEndWrap','distWrap','effWrap','tempWrap'].forEach(id => document.getElementById(id).classList.add('highlight'));
+    
+    btn.innerHTML = `<img src="${previewUrl}" class="preview" alt=""><span class="label" style="color:#16a34a">다시 촬영</span>`;
+    btn.classList.add('done');
+    
+    const statusMsg = filled >= 3 ? `${filled}개 항목 인식 완료` : filled > 0 ? `${filled}개만 인식 - 나머지 직접 입력` : "인식 실패 - 직접 입력";
+    area.innerHTML = `<div class="status ${filled>=3?'ok':filled>0?'loading':'err'}">${statusMsg}</div>
+      <details><summary>OCR 상세 (Pass 1/2/3)</summary><div class="ocr-raw">=== Pass 1 (원본) ===\n${r1.data.text}\n\n=== Pass 2 (전처리) ===\n${r2.data.text}\n\n=== Pass 3 (확대) ===\n${r3.data.text}\n\n=== 병합 결과 ===\n${JSON.stringify(merged,null,2)}</div></details>`;
+    
+    checkBtn();
+  } catch (err) {
+    resetScanBtn();
+    area.innerHTML = `<div class="status err">인식 실패 - 아래에서 직접 입력</div>
+      <details><summary>오류 상세</summary><div class="ocr-raw">${err.message||err}</div></details>`;
+  }
+}
+
+function resetScanBtn() {
+  const btn = document.getElementById('scanBtn');
+  btn.innerHTML = '<span class="icon">+</span><span class="label">계기판 사진 촬영 / 선택</span><span class="sub">사진 선택 후 인식할 영역을 직접 지정</span>';
+  btn.classList.remove('done');
+}
+
+// ==================== File input ====================
+document.getElementById('fileInput').addEventListener('change', async function(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  e.target.value = '';
+  
+  try {
+    const canvas = await fileToCanvas(file);
+    showCropModal(canvas);
+  } catch (err) {
+    document.getElementById('statusArea').innerHTML = 
+      `<div class="status err">이미지 로드 실패: ${err.message}</div>`;
+  }
+});
+
+// ==================== Inputs ====================
+function checkBtn() {
+  const s = parseFloat(g('socStart'));
+  const e = parseFloat(g('socEnd'));
+  const d = parseFloat(g('distance'));
+  const ef = parseFloat(g('efficiency'));
+  const ok = s>0 && e>0 && s>e && d>0 && ef>0;
+  const btn = document.getElementById('calcBtn');
+  btn.disabled = !ok;
+  btn.textContent = ok ? "분석 시작" : "출발 SOC 입력 + 계기판 데이터 필요";
+}
+
+['socStart','socEnd','distance','temp'].forEach(id => {
+  document.getElementById(id).addEventListener('input', checkBtn);
+});
+
+document.getElementById('effDisplay').addEventListener('input', function(e) {
+  let raw = this.value.replace(/[^0-9]/g, '');
+  if (raw.length > 3) raw = raw.slice(0, 3);
+  if (raw.length >= 2) {
+    const formatted = raw[0] + '.' + raw.slice(1);
+    this.value = formatted;
+    document.getElementById('efficiency').value = formatted;
+  } else if (raw.length === 1) {
+    this.value = raw;
+    document.getElementById('efficiency').value = '';
+  } else {
+    this.value = '';
+    document.getElementById('efficiency').value = '';
+  }
+  checkBtn();
+});
+
+// ==================== Calculate ====================
+function runCalc() {
+  const socStart = parseFloat(g('socStart'));
+  const socEnd = parseFloat(g('socEnd'));
+  const dist = parseFloat(g('distance'));
+  const eff = parseFloat(g('efficiency'));
+  const tmp = parseFloat(g('temp')) || 20;
+  
+  const socUsed = (socStart - socEnd) / 100;
+  const energyUsed = dist / eff;
+  const estFull = energyUsed / socUsed;
+  const tc = getTempCorr(tmp);
+  const corrFull = estFull / tc.factor;
+  
+  const wO = ((BATTERY.official_net - corrFull) / BATTERY.official_net * 100);
+  const wA = ((BATTERY.actual_usable - corrFull) / BATTERY.actual_usable * 100);
+  const sohO = Math.max(0, 100-wO);
+  const sohA = Math.max(0, 100-wA);
+  
+  const socRE = 2 / (socStart-socEnd);
+  const effRE = 0.03 + 10/dist;
+  const totalRE = Math.sqrt(socRE**2 + effRE**2 + 0.03**2);
+  const margin = corrFull * totalRE;
+  
+  const rng = (cap) => [
+    Math.max(0,(cap-(corrFull+margin))/cap*100).toFixed(1),
+    Math.max(0,(cap-(corrFull-margin))/cap*100).toFixed(1)
+  ];
+  const rO = rng(BATTERY.official_net), rA = rng(BATTERY.actual_usable);
+  
+  const wOc = wearColor(Math.max(0,wO)), wAc = wearColor(Math.max(0,wA));
+  const sOc = sohColor(sohO), sAc = sohColor(sohA);
+  
+  function gauge(val, col, label, sub) {
+    const size=116, r=(size-12)/2, circ=2*Math.PI*r, off=circ*(1-Math.min(Math.max(val/100,0),1));
+    return `<div class="gauge">
+      <svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#f0f0f4" stroke-width="10"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}" style="transition:stroke-dashoffset 0.8s cubic-bezier(.4,0,.2,1)"/>
+      </svg>
+      <div style="margin-top:${-size/2-16}px;height:${size/2+16}px;display:flex;align-items:center;justify-content:center">
+        <span class="gauge-value" style="color:${col}">${val.toFixed(1)}%</span>
+      </div>
+      <span class="gauge-label">${label}</span>
+      <span class="gauge-sub">${sub}</span>
+    </div>`;
+  }
+  
+  function wearBlock(label, wear, range, col) {
+    const w = Math.max(0,wear);
+    return `<div>
+      <div class="wear-row"><span class="wear-label">${label}</span>
+        <span class="wear-val" style="color:${col}">${w.toFixed(1)}% <span class="wear-range">(${range[0]}~${range[1]}%)</span></span>
+      </div>
+      <div class="wear-bar"><div class="wear-fill" style="width:${Math.min(w,30)/30*100}%;background:${col}"></div></div>
+    </div>`;
+  }
+  
+  function stat(label, val, unit, accent, sub) {
+    return `<div class="stat"><div class="stat-label">${label}</div>
+      <div><span class="stat-val" style="color:${accent}">${val}</span> <span class="stat-unit">${unit||''}</span></div>
+      ${sub?`<div class="stat-sub">${sub}</div>`:''}
+    </div>`;
+  }
+  
+  document.getElementById('resultArea').innerHTML = `<div class="result">
+    <div class="card" style="border-radius:18px;padding:20px 12px">
+      <div class="card-title" style="text-align:center;margin-bottom:14px">Battery State of Health</div>
+      <div class="gauge-wrap">
+        ${gauge(sohO, sOc, "공식 Net 기준", `웨어 ${Math.max(0,wO).toFixed(1)}%`)}
+        ${gauge(sohA, sAc, "실측 기준", `웨어 ${Math.max(0,wA).toFixed(1)}%`)}
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-title">웨어율 상세</div>
+      ${wearBlock("공식 Net 기준", wO, rO, wOc)}
+      ${wearBlock("실측 Usable 기준", wA, rA, wAc)}
+    </div>
+    
+    <div class="row">
+      ${stat("소모 에너지", energyUsed.toFixed(2), "kWh", "#6366f1")}
+      ${stat("추정 만충", estFull.toFixed(1), "kWh", "#16a34a")}
+    </div>
+    <div class="row">
+      ${stat("온도 보정 후", corrFull.toFixed(1), "kWh", "#ca8a04", `${tc.label} (x${tc.factor})`)}
+      ${stat("오차 범위", `+-${margin.toFixed(1)}`, "kWh", "#ea580c", `상대오차 +-${(totalRE*100).toFixed(1)}%`)}
+    </div>
+    
+    <div class="log">
+      <div class="log-title">CALCULATION LOG</div>
+      <div>소모 = ${dist}/${eff} = <span style="color:#6366f1">${energyUsed.toFixed(2)}kWh</span></div>
+      <div>SOC = ${socStart}-${socEnd} = <span style="color:#6366f1">${socStart-socEnd}%</span></div>
+      <div>만충 = ${energyUsed.toFixed(2)}/${socUsed.toFixed(2)} = <span style="color:#16a34a">${estFull.toFixed(1)}kWh</span></div>
+      <div>보정 = ${estFull.toFixed(1)}/${tc.factor} = <span style="color:#ca8a04">${corrFull.toFixed(1)}kWh</span></div>
+      <div>웨어Net = (${BATTERY.official_net}-${corrFull.toFixed(1)})/${BATTERY.official_net} = <span style="color:${wOc}">${Math.max(0,wO).toFixed(1)}%</span></div>
+      <div>웨어실측 = (${BATTERY.actual_usable}-${corrFull.toFixed(1)})/${BATTERY.actual_usable} = <span style="color:${wAc}">${Math.max(0,wA).toFixed(1)}%</span></div>
+    </div>
+    
+    <div class="note">※ 계기판 기반 추정치. 정확한 SOH는 OBD + Car Scanner로 MEC를 확인하세요. SOC를 많이 소모할수록 오차가 줄어듭니다.</div>
+  </div>`;
+  
+  document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
