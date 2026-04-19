@@ -83,6 +83,19 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
+  .temp-sign-btn {
+    background: #f0f0f4; border: none; border-radius: 6px;
+    color: var(--text); font-family: var(--mono);
+    font-size: 14px; font-weight: 700;
+    width: 24px; height: 24px;
+    cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .temp-sign-btn.negative {
+    background: #fee2e2; color: #dc2626;
+  }
 
   /* Spec */
   .spec-bar { display: flex; background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
@@ -237,7 +250,9 @@
       </div>
       <div class="input-line">
         <span class="input-line-label">온도:</span>
-        <input type="tel" id="temp" class="input-line-value" inputmode="decimal" step="0.5" placeholder="27.5" data-idx="1">
+        <button type="button" id="tempSign" class="temp-sign-btn" onclick="toggleTempSign()">+</button>
+        <input type="tel" id="temp" class="input-line-value" inputmode="numeric" maxlength="3" placeholder="275" data-idx="1">
+        <input type="hidden" id="tempValue">
         <span class="input-line-unit">°C</span>
       </div>
 
@@ -335,22 +350,123 @@ function toggleSave() {
   document.getElementById('saveToggle').classList.toggle('on', saveEnabled);
 }
 
-// ==================== Enter key navigation ====================
+// ==================== Auto-focus chain ====================
 // 순서: 충전후 → 현재 → 온도 → 주행거리 → 전비 → 누적주행거리
 const inputIds = ['socStart', 'socEnd', 'temp', 'distance', 'effDisplay', 'odometer'];
-inputIds.forEach((id, idx) => {
+
+function focusNext(currentId) {
+  const idx = inputIds.indexOf(currentId);
+  if (idx < 0) return;
+  if (idx < inputIds.length - 1) {
+    const nextEl = document.getElementById(inputIds[idx + 1]);
+    nextEl.focus();
+  }
+}
+
+// 엔터 키 처리 (일반 키보드용 - 데스크톱/외부 키보드)
+inputIds.forEach((id) => {
   const el = document.getElementById(id);
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      const idx = inputIds.indexOf(id);
       if (idx < inputIds.length - 1) {
-        document.getElementById(inputIds[idx + 1]).focus();
+        focusNext(id);
       } else {
         el.blur();
         if (!document.getElementById('calcBtn').disabled) runCalc();
       }
     }
   });
+});
+
+// ---- SOC 자동이동 (충전후/현재): 2자리 + 300ms 딜레이, 100 입력 가능 ----
+let socTimers = {};
+function setupSocAutoAdvance(id) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    clearTimeout(socTimers[id]);
+    let raw = el.value.replace(/[^0-9]/g, '');
+    if (raw.length > 3) raw = raw.slice(0, 3);
+    // 100은 허용, 그 외 0~99
+    if (raw.length === 3 && parseInt(raw) > 100) raw = raw.slice(0, 2);
+    el.value = raw;
+    checkBtn();
+    
+    // 3자리 완성 (100) → 즉시 이동
+    if (raw.length === 3) {
+      focusNext(id);
+      return;
+    }
+    // 2자리 → 300ms 딜레이 후 이동 (그 사이 3번째 숫자 치면 100 완성)
+    if (raw.length === 2) {
+      socTimers[id] = setTimeout(() => focusNext(id), 300);
+    }
+  });
+}
+setupSocAutoAdvance('socStart');
+setupSocAutoAdvance('socEnd');
+
+// ---- 온도 음수 토글 ----
+let tempNegative = false;
+function toggleTempSign() {
+  tempNegative = !tempNegative;
+  const btn = document.getElementById('tempSign');
+  btn.textContent = tempNegative ? '-' : '+';
+  btn.classList.toggle('negative', tempNegative);
+  updateTempValue();
+  checkBtn();
+}
+
+function updateTempValue() {
+  const display = document.getElementById('temp').value;
+  const raw = display.replace(/[^0-9]/g, '');
+  let val = '';
+  if (raw.length >= 2) {
+    // XX.X 형태 (마지막 자리가 소수)
+    const intPart = raw.slice(0, raw.length - 1);
+    const decPart = raw.slice(-1);
+    val = (tempNegative ? '-' : '') + parseInt(intPart) + '.' + decPart;
+  } else if (raw.length === 1) {
+    val = (tempNegative ? '-' : '') + raw;
+  }
+  document.getElementById('tempValue').value = val;
+}
+
+// ---- 온도 자동이동: 3자리 입력 시 XX.X로 변환 + 이동 ----
+document.getElementById('temp').addEventListener('input', function() {
+  let raw = this.value.replace(/[^0-9]/g, '');
+  if (raw.length > 3) raw = raw.slice(0, 3);
+  
+  // 표시: 그냥 숫자 그대로 (사용자에게는 원시 입력 보여줌)
+  // 2자리 이상이면 소수점 자동 삽입해서 표시
+  if (raw.length >= 2) {
+    const intPart = raw.slice(0, raw.length - 1);
+    const decPart = raw.slice(-1);
+    this.value = intPart + '.' + decPart;
+  } else {
+    this.value = raw;
+  }
+  
+  updateTempValue();
+  checkBtn();
+  
+  // 3자리 차면 자동이동
+  if (raw.length === 3) {
+    focusNext('temp');
+  }
+});
+
+// ---- 주행거리 자동이동: 1.2초 타이머 ----
+let distanceTimer = null;
+document.getElementById('distance').addEventListener('input', function() {
+  clearTimeout(distanceTimer);
+  const raw = this.value.replace(/[^0-9]/g, '');
+  this.value = raw;
+  checkBtn();
+  if (raw.length > 0) {
+    distanceTimer = setTimeout(() => focusNext('distance'), 1200);
+  }
 });
 
 // ==================== Input validation ====================
@@ -364,12 +480,11 @@ function checkBtn() {
   btn.disabled = !ok;
   btn.textContent = ok ? "분석 시작" : "데이터를 입력하세요";
 }
-['socStart','socEnd','distance','temp'].forEach(id => {
-  document.getElementById(id).addEventListener('input', checkBtn);
-});
 
-// Efficiency auto-decimal: 64 → 6.4
+// Efficiency auto-decimal: 64 → 6.4 + 자동이동
+let efficiencyTimer = null;
 document.getElementById('effDisplay').addEventListener('input', function(e) {
+  clearTimeout(efficiencyTimer);
   let raw = this.value.replace(/[^0-9]/g, '');
   if (raw.length > 3) raw = raw.slice(0, 3);
   if (raw.length >= 2) {
@@ -384,6 +499,10 @@ document.getElementById('effDisplay').addEventListener('input', function(e) {
     document.getElementById('efficiency').value = '';
   }
   checkBtn();
+  // 2자리 이상이면 짧은 딜레이 후 이동
+  if (raw.length >= 2) {
+    efficiencyTimer = setTimeout(() => focusNext('effDisplay'), 400);
+  }
 });
 
 // ==================== History / localStorage ====================
@@ -469,7 +588,7 @@ function runCalc() {
   const socEnd = parseFloat(g('socEnd'));
   const dist = parseFloat(g('distance'));
   const eff = parseFloat(g('efficiency'));
-  const tmp = parseFloat(g('temp')) || 20;
+  const tmp = parseFloat(g('tempValue')) || parseFloat(g('temp')) || 20;
   const odo = parseFloat(g('odometer'));
   
   const socUsed = (socStart - socEnd) / 100;
