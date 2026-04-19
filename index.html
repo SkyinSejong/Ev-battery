@@ -820,7 +820,17 @@ function renderWearChart(data) {
       if (maxO === minO) return PAD.l + chartW / 2;
       return PAD.l + ((data[i].odometer || 0) - minO) / (maxO - minO) * chartW;
     }
-    return PAD.l + (data.length === 1 ? chartW/2 : (i / (data.length - 1)) * chartW);
+    // 날짜별: 최소 간격 기반 가운데 정렬 (최대 300개까지 지원)
+    const n = data.length;
+    if (n === 1) return PAD.l + chartW / 2;
+    // 기본 간격: 차트 폭을 12등분 (이전 6슬롯의 절반 간격)
+    // 데이터가 많으면 차트 폭에 맞춰 자동 축소
+    const baseStep = chartW / 12;
+    const maxStep = chartW / (n - 1); // 양 끝까지 꽉 채우는 간격
+    const step = Math.min(baseStep, maxStep);
+    const totalSpan = step * (n - 1);
+    const startX = PAD.l + (chartW - totalSpan) / 2;
+    return startX + i * step;
   };
   const getY = (v) => PAD.t + chartH - ((v - minY) / (maxY - minY)) * chartH;
   // 차트 영역으로 clamp (표시용)
@@ -916,7 +926,14 @@ function renderCapacityChart(data) {
       if (maxO === minO) return PAD.l + chartW / 2;
       return PAD.l + ((data[i].odometer || 0) - minO) / (maxO - minO) * chartW;
     }
-    return PAD.l + (data.length === 1 ? chartW/2 : (i / (data.length - 1)) * chartW);
+    const n = data.length;
+    if (n === 1) return PAD.l + chartW / 2;
+    const baseStep = chartW / 12;
+    const maxStep = chartW / (n - 1);
+    const step = Math.min(baseStep, maxStep);
+    const totalSpan = step * (n - 1);
+    const startX = PAD.l + (chartW - totalSpan) / 2;
+    return startX + i * step;
   };
   const getY = (v) => PAD.t + chartH - ((v - minY) / (maxY - minY)) * chartH;
   const clampY = (v) => Math.max(minY, Math.min(maxY, v));
