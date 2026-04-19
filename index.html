@@ -422,12 +422,11 @@ function updateTempValue() {
   const display = document.getElementById('temp').value;
   const raw = display.replace(/[^0-9]/g, '');
   let val = '';
-  if (raw.length >= 2) {
-    // XX.X 형태 (마지막 자리가 소수)
-    const intPart = raw.slice(0, raw.length - 1);
-    const decPart = raw.slice(-1);
-    val = (tempNegative ? '-' : '') + parseInt(intPart) + '.' + decPart;
-  } else if (raw.length === 1) {
+  if (raw.length === 3) {
+    // XX.X 형태 (예: 275 → 27.5)
+    val = (tempNegative ? '-' : '') + raw.slice(0, 2) + '.' + raw.slice(2);
+  } else if (raw.length > 0) {
+    // 1~2자리: 정수로 (예: 27)
     val = (tempNegative ? '-' : '') + raw;
   }
   document.getElementById('tempValue').value = val;
@@ -438,12 +437,9 @@ document.getElementById('temp').addEventListener('input', function() {
   let raw = this.value.replace(/[^0-9]/g, '');
   if (raw.length > 3) raw = raw.slice(0, 3);
   
-  // 표시: 그냥 숫자 그대로 (사용자에게는 원시 입력 보여줌)
-  // 2자리 이상이면 소수점 자동 삽입해서 표시
-  if (raw.length >= 2) {
-    const intPart = raw.slice(0, raw.length - 1);
-    const decPart = raw.slice(-1);
-    this.value = intPart + '.' + decPart;
+  // 3자리 완성되면 XX.X로 변환, 그전에는 숫자 그대로 표시
+  if (raw.length === 3) {
+    this.value = raw.slice(0, 2) + '.' + raw.slice(2);
   } else {
     this.value = raw;
   }
